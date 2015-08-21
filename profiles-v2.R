@@ -16,8 +16,8 @@ sources <- c(
   "Human-100k.tsv"="Human"
 )
 
-dfile <- paste0('profiles/', names(sources[9]))
-d <- read.delim(dfile, col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
+dfile <- names(sources[3])
+d <- read.delim(paste0('profiles/', dfile), col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
   mutate(sum = A + C + G + T, GC = (C + G) / sum)
 
 #### GC profile along chromosomes/scaffolds ####
@@ -54,58 +54,88 @@ d %>%
 # for species with only small scaffolds
 # join all the data into pseudo blocks of given length (250 Mb currently)
 
-bases_per_block <- 1e5
-bases_per_pseudo <- 2.5e8
-blocks_per_pseudo <- bases_per_pseudo / bases_per_block
-
 # summarise shorter blocks to 100k blocks
-d %>%
-  group_by(seq, pos=round_any(pos, bases_per_block, floor)) %>%
-  summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
-  mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>%
-  ungroup() ->
-  d100k
-
-# reorder the data decreasingly by the contig size
-d100k %>% 
-  group_by(seq) %>%
-  summarise(size=as.numeric(max(pos + bases_per_block))) %>%
-  arrange(desc(size)) %>%
-  mutate(seq_end=cumsum(size)) ->
-  seqs_by_size
-
-# add faceting variables to scaffold endpoints
-seqs_by_size %>%
-  mutate(pseudo_seq_num=(seq_end %/% bases_per_pseudo) + 1,
-         pseudo_seq0=paste("pseudo", pseudo_seq_num),
-         pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
-         pseudo_pos=seq_end %% bases_per_pseudo) ->
-  sbs_pseudo
-
-d100k %>%
-  # start with the longest sequences
-  arrange(factor(seq, levels=seqs_by_size$seq), pos) %>% 
-  # wrap the concatenated positions with modulo
-  mutate(catpos=seq_along(pos) * bases_per_block,
-         pseudo_seq_num=(catpos %/% bases_per_pseudo) + 1,
-         pseudo_seq0=paste("pseudo", pseudo_seq_num),
-         pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
-         pseudo_pos=catpos %% bases_per_pseudo) %>%
-  # plot it
-  ggplot(aes(pseudo_pos, GC)) + 
-  geom_line() +
-  geom_point(y=0.7, size=2, colour="red", data=sbs_pseudo) +
-  facet_wrap(~pseudo_seq, ncol=1) +
-  ylim(c(.3,.7))
-
-## spare parts
-# create pseudo sequences, each containing required number of bases
-mutate(pseudo_seq_num=rep(1:30, length.out=n(), each=blocks_per_pseudo), 
-       pseudo_seq0=paste("pseudo", pseudo_seq_num),
-       pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0))) %>% 
-  group_by(pseudo_seq) %>%
-  mutate(pseudo_pos=(seq_along(pseudo_seq) - 1) * bases_per_block) %>%
+plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5) {
+  d %>%
+    group_by(seq, pos=round_any(pos, bases_per_block, floor)) %>%
+    summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
+    mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>%
+    ungroup() ->
+    d100k
   
+  # reorder the data decreasingly by the contig size
+  d100k %>% 
+    group_by(seq) %>%
+    summarise(size=as.numeric(max(pos + bases_per_block))) %>%
+    arrange(desc(size)) %>%
+    mutate(seq_end=cumsum(size)) ->
+    seqs_by_size
+  
+  # add faceting variables to scaffold endpoints
+  seqs_by_size %>%
+    mutate(pseudo_seq_num=(seq_end %/% bases_per_pseudo) + 1,
+           pseudo_seq0=paste("pseudo", pseudo_seq_num),
+           pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
+           pseudo_pos=seq_end %% bases_per_pseudo) ->
+    sbs_pseudo
+  
+  d100k %>%
+    # start with the longest sequences
+    arrange(factor(seq, levels=seqs_by_size$seq), pos) %>% 
+    # wrap the concatenated positions with modulo
+    mutate(catpos=seq_along(pos) * bases_per_block,
+           pseudo_seq_num=(catpos %/% bases_per_pseudo) + 1,
+           pseudo_seq0=paste("pseudo", pseudo_seq_num),
+           pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
+           pseudo_pos=catpos %% bases_per_pseudo) %>%
+    # plot it
+    ggplot(aes(pseudo_pos, GC)) + 
+    geom_line() +
+    geom_point(y=0.7, size=2, colour="red", data=sbs_pseudo) +
+    facet_wrap(~pseudo_seq, ncol=1) +
+    ylim(c(.3,.7)) +
+    ggtitle(title)
+}
+
+load.plot.save <- function(fn, bases_per_pseudo=2.5e8) {
+  d <- read.delim(paste0('profiles/', fn), 
+                  col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
+    mutate(sum = A + C + G + T, GC = (C + G) / sum)
+  
+  d %>% plot_pseudo(sources[fn], bases_per_pseudo)
+  
+  d %>% 
+    group_by(seq) %>%
+    summarise(size=as.numeric(max(pos + bases_per_block))) %>%
+    {(sum(.$size) %/% bases_per_pseudo) + 1} ->
+    npanels
+
+  # when there is too few panels, do not make them too high
+  # do not go over A4 height on the other side
+  h <- min(280, npanels * 40 + 50)
+  
+  ggsave(paste0('results/mondsee/pseudo-', sources[fn], '.pdf'), width=190, height=h, units = "mm")
+}
+
+# run for all input files
+sapply(names(sources), load.plot.save)
+
+#### test rescale function ####
+block_rescale <- function(d, bases_per_block) {
+  d %>%
+    group_by(seq, pos=round_any(pos, bases_per_block, floor)) %>%
+    summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
+    mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>%
+    ungroup()
+}
+
+ggplot(data.frame(), aes(pos, GC)) +
+  geom_line(data=d %>% filter(seq  %in% top20seqs), colour="gray") +
+  geom_line(data=d %>% filter(seq  %in% top20seqs) %>% block_rescale(1e5), colour="red") +
+  facet_wrap(~seq) +
+  ylim(c(0.3, 0.7))
+ggsave('results/mondsee/block-scaling-test.pdf', width=280, height=190, units="mm")
+
 #### GC summary for more species ####
 
 d %>% 
