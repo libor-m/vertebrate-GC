@@ -59,18 +59,25 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5) 
   d %>%
     group_by(seq, pos=round_any(pos, bases_per_block, floor)) %>%
     summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
-    mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>%
-    ungroup() ->
+    mutate(sum = A + C + G + T, GC = (C + G) / (sum + 1)) %>%
+    ungroup ->
     d100k
   
   # reorder the data decreasingly by the contig size
   d100k %>% 
     group_by(seq) %>%
     summarise(size=as.numeric(max(pos + bases_per_block))) %>%
+    filter(size >= 2*bases_per_block) %>%
     arrange(desc(size)) %>%
-    mutate(seq_end=cumsum(size)) ->
+    ungroup %>%
+    mutate(seq_end=cumsum(size),
+           alternate=ifelse(row_number() %% 2, "A", "B")) ->
     seqs_by_size
   
+  # create a map alternating along the order of the chromosomes
+  altmap <- seqs_by_size$alternate
+  names(altmap) <- seqs_by_size$seq
+    
   # add faceting variables to scaffold endpoints
   seqs_by_size %>%
     mutate(pseudo_seq_num=(seq_end %/% bases_per_pseudo) + 1,
@@ -80,6 +87,10 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5) 
     sbs_pseudo
   
   d100k %>%
+    # get rid of singletons
+    group_by(seq) %>%
+    filter(n() > 1) %>%
+    ungroup %>%
     # start with the longest sequences
     arrange(factor(seq, levels=seqs_by_size$seq), pos) %>% 
     # wrap the concatenated positions with modulo
@@ -87,14 +98,18 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5) 
            pseudo_seq_num=(catpos %/% bases_per_pseudo) + 1,
            pseudo_seq0=paste("pseudo", pseudo_seq_num),
            pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
-           pseudo_pos=catpos %% bases_per_pseudo) %>%
+           pseudo_pos=catpos %% bases_per_pseudo,
+           alt=altmap[seq]) %>%
     # plot it
     ggplot(aes(pseudo_pos, GC)) + 
-    geom_line() +
-    geom_point(y=0.7, size=2, colour="red", data=sbs_pseudo) +
+    geom_line(aes(group=seq, colour=alt)) +
+    geom_point(y=0.7, size=4, colour="red", shape="<", data=sbs_pseudo) +
+    geom_text(aes(label=seq), y=0.7, hjust=1.5, colour="red", data=sbs_pseudo %>% filter(size > 1.5e7)) +
     facet_wrap(~pseudo_seq, ncol=1) +
     ylim(c(.3,.7)) +
-    ggtitle(title)
+    ggtitle(title) +
+    scale_color_manual(values=c("A" = "#000000", "B" = "#777777"), guide=F)
+    
 }
 
 load.plot.save <- function(fn, bases_per_pseudo=2.5e8) {

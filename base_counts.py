@@ -12,6 +12,8 @@ TODO: output in wig file, GC content
 import sys
 import collections
 import itertools
+import argparse
+
 import pysam
 
 def fai(file):
@@ -37,36 +39,46 @@ def windows(data, size):
     for i in xrange(0, len(data) - size + 1, size):
         yield i, data[i:(i + size)]
 
-def main():
-    if len(sys.argv) < 2:
-        print >> sys.stderr, "use: %s faidxed_fasta [window_size=100K]" % sys.argv[0]
-        sys.exit(1)
+def argparser():
+    args = argparse.ArgumentParser(description="Count base counts in windows along chromosomes.")
+    args.add_argument("--window", type=int, default=100000,
+        help="Window size (default 100k).")
+    args.add_argument("--bases", default="ACGTacgt",
+        help="Bases to count (default: ACGTacgt")
+    args.add_argument("-q", "--quiet", action="store_true",
+        help="Do not report progress.")
+    args.add_argument("--ucase", action="store_true",
+        help="Uppercase input (to remove soft masking).")
+    args.add_argument("input", 
+        help="Multifasta with .fai index (can be gzipped).")
+    return args
 
-    if len(sys.argv) > 2:
-        win_size = int(sys.argv[2])
-    else:
-        win_size = 100000
+def main():
+    parser = argparser()
+    args = parser.parse_args()
 
     # TODO: overlapping windows
-    for seq, _, data in fasta(sys.argv[1]):
+    for seq, _, data in fasta(args.input):
         
         # output current sequence name
-        sys.stderr.write(seq)
+        if not args.quiet:
+            sys.stderr.write(seq)
         
         # walk by windows of given size
-        for start, win in windows(data, win_size):
+        for start, win in windows(data, args.window):
+            # uppercase each window if required
+            if args.ucase:
+                win = win.upper()
+
             # count different bases in window
-            # TODO: add repeat masking obedient flag
-            try:
-            	c = collections.Counter(c.upper() for c in win)
-            except:
-                print >> sys.stderr, win
+            c = collections.Counter(win)
             
             # print the results for each window
-            print "\t".join([seq, str(start)] + [str(c[base]) for base in ['A', 'C', 'G', 'T']])
+            print "\t".join([seq, str(start)] + [str(c[base]) for base in args.bases])
             
             # progress indicator
-            sys.stderr.write('.') 
+            if not args.quiet:
+                sys.stderr.write('.') 
 
 if __name__ == '__main__':
     main()

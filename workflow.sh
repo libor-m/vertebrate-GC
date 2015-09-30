@@ -20,3 +20,7 @@ wc -l data/* | head -n -1 | mawk '{print $2 "\t" $1}' | cut -d'/' -f2 | sed 's/.
 # summary of chromosome sizes
 <data/chrom-sizes.tsv mawk '{m[$1] += $3} END{for (x in m) {print x, m[x]}}'
 
+# use the softmasked information
+# wherever available
+mkdir profiles-v4
+find genomes -name '*.dna_sm.*.fai' | parallel -u "python base_counts.py -q --window 10000 {.} > profiles-v4/{/.}.tsv"
