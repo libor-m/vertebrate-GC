@@ -36,8 +36,11 @@ sources <- c(
   "Homo_sapiens.GRCh38.dna_sm.toplevel.fa.tsv" = "Human"
 )
 
-tabs <- lapply(names(sources), read.name, "profiles-v4")
-da <- bind_rows(tabs)
+
+# load "data all"
+lapply(names(sources), read.name, "profiles-v4") %>%
+  bind_rows ->
+  da
 
 # check how many 'short' blocks we have
 da %>%
@@ -45,7 +48,8 @@ da %>%
   ggplot(aes(total_sum)) + 
   geom_density(colour=NA, fill="#444444") +
   facet_wrap(~source, ncol=3, scales="free")
-  
+ggsave('results/profiles-v4/block-sizes.pdf', width=200, height=200, units="mm")
+
 # plot of total GC
 da %>%
   mutate(source=factor(source, levels=names(sources), labels=sources)) %>%
@@ -113,7 +117,7 @@ dm %>%
   ggtitle("Count of 10k blocks")
 ggsave('results/profiles-v4/block-count.pdf', width=6, height=7.4, units="in")
 
-# gc histograms
+# gc density plot - normalizes the sample sizes
 dm %>%
   filter(sum > 1000) %>%
   ggplot(aes(GC, fill=compartment)) +
@@ -125,7 +129,21 @@ dm %>%
   theme(axis.line.y=element_blank(),
         axis.ticks.y=element_blank(),
         axis.text.y=element_blank())
-ggsave('results/profiles-v4/gc-masked.pdf', width=7.4, height=5, units="in")
+ggsave('results/profiles-v4/gc-masked-density.pdf', width=7.4, height=5, units="in")
+
+# gc histogram - the sample sizes are aparent
+dm %>%
+  filter(sum > 1000) %>%
+  ggplot(aes(GC, fill=compartment)) +
+  geom_histogram(alpha=0.7, position="identity") +
+  facet_wrap(~source, ncol=3) +
+  xlim(c(0.3, 0.6)) +
+  xlab("GC fraction") +
+  ylab("block count") +
+  theme(axis.line.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.y=element_blank())
+ggsave('results/profiles-v4/gc-masked-hist.pdf', width=7.4, height=5, units="in")
 
 # assembly snakes
 # ( too many short contigs influence the bins )
@@ -154,8 +172,9 @@ dnx %>%
 ggsave('results/profiles-v4/assembly-snakes.pdf', width=7.4, height=5, units="in")
 
 # profiles along chromosomes
-# run plot_pseudo from profiles-v2.R
 #
+source('chromoplot.R')
+
 plot.save <- function(species, din, prefix, bases_per_pseudo=2.5e8, bases_per_block=1e5) {
   din %>%
     filter(source == species) ->

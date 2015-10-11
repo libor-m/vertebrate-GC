@@ -14,5 +14,9 @@ For general overview overlap global histograms of the three animals.
 
 Unlike zebrafish, gar has some peaks in the chromosome profiles
 
-## 
+## TODO
 k-mer analysis of the regions (ala hovna, barnes hut sne)
+
+## Notes
+This is kind of an extension to EMBOSS isochore:
+http://emboss.sourceforge.net/apps/cvs/emboss/apps/isochore.html
