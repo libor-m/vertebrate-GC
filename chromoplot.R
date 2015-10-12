@@ -11,16 +11,14 @@ library(plyr)
 library(dplyr)
 library(gtools)
 library(ggplot2)
+library(scales)
 
 sortchrom <- function(df) df %>% mutate(seq=seq %>% factor(levels=seq %>% unique %>% mixedsort))
 
 # sort chromosomes by size
 chrom_sort_size <- function(d)
   d %>%
-    group_by(seq) %>%
-    summarise(size=as.numeric(max(pos))) %>%
-    arrange(desc(size)) %>%
-    ungroup
+    arrange(desc(size))
 
 # sort chromosomes by 'natural' order
 # use factor levels for the ordering,
@@ -28,15 +26,23 @@ chrom_sort_size <- function(d)
 # not to disrupt the following code
 chrom_sort_alnum <- function(d)
   d %>%
-    group_by(seq) %>%
-    summarise(size=as.numeric(max(pos))) %>%
-    ungroup %>%
     sortchrom %>%
     arrange(seq) %>%
     mutate(seq=as.character(seq))
 
+mbases <- function (x) {
+  x <- round_any(x, 1e4)
+  paste(x / 1e6, "MB")
+}
+
 # summarise shorter blocks to 100k blocks
-plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5, chromsort=chrom_sort_size) {
+plot_pseudo <- function (d, 
+                         title, 
+                         bases_per_pseudo=2.5e8, 
+                         bases_per_block=1e5, 
+                         chromsort=chrom_sort_size) {
+  
+  # resample the data to bases_per_block resolution
   d %>%
     group_by(seq, pos=round_any(pos, bases_per_block, floor)) %>%
     summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
@@ -44,11 +50,14 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5, 
     ungroup ->
     d100k
   
-  # reorder the data decreasingly by the contig size
+  # get a list of chromosome names in the desired order
   d100k %>% 
+    group_by(seq) %>%
+    summarise(size=pos %>% max %>% as.numeric, npoints=n()) %>%
+    ungroup %>%
     chromsort %>%
-    filter(size >= 2*bases_per_block) %>%
-    mutate(seq_end=cumsum(size),
+    filter(npoints > 1) %>%
+    mutate(seq_end=cumsum(npoints * bases_per_block),
            alternate=ifelse(row_number() %% 2, "A", "B")) ->
     seqs_sorted
   
@@ -66,6 +75,9 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5, 
   
   # push the data through the final pipeline
   d100k %>%
+    # keep only data for sequences 
+    filter(seq %in% seqs_sorted$seq) %>%
+    
     # get rid of singletons
     group_by(seq) %>%
     filter(n() > 1) %>%
@@ -79,19 +91,22 @@ plot_pseudo <- function (d, title, bases_per_pseudo=2.5e8, bases_per_block=1e5, 
            pseudo_seq_num=(catpos %/% bases_per_pseudo) + 1,
            pseudo_seq0=paste(title, pseudo_seq_num),
            pseudo_seq=factor(pseudo_seq0, levels=unique(pseudo_seq0)),
-           pseudo_pos=catpos %% bases_per_pseudo,
-           alt=altmap[seq]) %>%
+           pseudo_pos=catpos %% bases_per_pseudo) %>%
+    
+    # add alternate coloring
+    left_join(sbs_pseudo %>% select(seq, alt=alternate)) %>%
     
     # plot it
     ggplot(aes(pseudo_pos, GC)) + 
     geom_line(aes(group=seq, colour=alt)) +
-    geom_point(y=0.7, size=4, colour="red", shape="|", data=sbs_pseudo) +
+    geom_point(y=0.7, size=4, colour="#777777", shape="|", data=sbs_pseudo) +
     # geom_text(aes(label=seq), y=0.7, hjust=1.5, colour="red", data=sbs_pseudo %>% filter(size > 1.5e7)) +
     # facet_wrap(~pseudo_seq, ncol=1) +
     facet_grid(pseudo_seq ~ .) +
-    ylim(c(.3,.7)) +
-    xlim(c(0, bases_per_pseudo)) +
+    scale_y_continuous(limits=c(.3,.7), labels=percent) +
+    scale_x_continuous(limits=c(0, bases_per_pseudo), labels=mbases) +
+    xlab("basepairs") +
     ggtitle(title) +
-    scale_color_manual(values=c("A" = "#000000", "B" = "#777777"), guide=F)
-  
+    scale_color_manual(values=c("A" = "#000000", "B" = "#777777"), guide=F) +
+    theme(plot.title = element_text(vjust=1))
 }

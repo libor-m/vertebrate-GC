@@ -89,16 +89,18 @@ ggsave('results/profiles-v4/gc-summary-5M.pdf', width=7.4, height=5, units="in")
 # separate profiles for masked and normal areas
 # (i. e. isolate variable 'masked' from column names)
 # and calculate few more handy columns
-da %>% 
-  select(-contains("GC"), -contains("sum")) %>%
-  gather(base, count, A:t) %>%
-  mutate(compartment=ifelse(base %in% c('A', 'C', 'G', 'T'), "normal", "masked")) %>%
-  mutate(base=toupper(base)) %>%
-  spread(base, count) %>%
-  mutate(sum=A + C + G + T,
-         GC=(C + G) / sum,
-         source=factor(source, levels=names(sources), labels=sources)) ->
-  dm
+wide_to_long <- function(d, source_names)
+  d %>% 
+    select(-contains("GC"), -contains("sum")) %>%
+    gather(base, count, A:t) %>%
+    mutate(compartment=ifelse(base %in% c('A', 'C', 'G', 'T'), "normal", "masked")) %>%
+    mutate(base=toupper(base)) %>%
+    spread(base, count) %>%
+    mutate(sum=A + C + G + T,
+           GC=(C + G) / sum,
+           source=factor(source, levels=names(source_names), labels=source_names))
+  
+da %>% wide_to_long(sources) -> dm
 
 # check the chunk sizes
 dm %>%
@@ -212,3 +214,72 @@ sapply(levels(dm$source), plot.save,
 sapply(levels(dm$source), plot.save, 
        dm %>% filter(compartment == 'masked'), 
        prefix='results/profiles-v4/pseudo-mask/pseudo-mask-')
+
+# improved plot.save which:
+# - tries to keep the height of the facet constant
+# - uses the plot data to find number of facets
+# - filters out too short scaffolds
+plot.save2 <- function(species, 
+                       din, 
+                       prefix="", 
+                       bases_per_pseudo=5e8, 
+                       bases_per_block=1e5,
+                       min_scaffold=3e5,
+                       panel_height=25) {
+  din %>%
+    filter(source == species) ->
+    d
+  
+  d %>% 
+    group_by(seq) %>%
+    summarise(len=max(pos)) %>%
+    ungroup %>%
+    filter(len > min_scaffold) %>%
+    .$seq ->
+    long_seqs
+    
+  d %>% 
+    filter(seq %in% long_seqs,
+           !grepl("rand", seq)) %>%
+    plot_pseudo(species, 
+                bases_per_pseudo,
+                chromsort=chrom_sort_alnum) ->
+    the_plot
+    
+  npanels <- the_plot$data$pseudo_seq %>% levels %>% length
+
+  # total height = 
+  #  npanels * panel_height +
+  #  (npanels-1) * panel_spacing +
+  #  extra
+  # where panel_spacing and extra should be constant
+  # measuring few outputs:
+  # panel_spacing seems to be 1.2 mm
+  # extra is 11.1 mm for the top margin, 13.1 for the bottom margin
+  h <- npanels * panel_height + (npanels - 1) * 1.2 + 24.2
+
+  ggsave(paste0(prefix, species, '.pdf'), 
+         plot=the_plot,
+         width=290, height=h, units = "mm")
+}
+
+# save images required for Figure S4(?)
+# gar, Zebra, stickl, tetra
+plot.save2("Spotted gar", dm, prefix="results/profiles-publication/profile-", min_scaffold=3e6)
+plot.save2("Stickelback", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+plot.save2("Zebrafish", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+plot.save2("Tetraodon", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+
+# Lancelet profile for Figuire S5(?)
+sources.br <- c(
+  "Branchiostoma_floridae_v2.0.assembly.fasta.tsv"="Lancelet"
+)
+
+# load lancelet v4 profile
+read.name(names(sources.br)[1], "profiles-v4") %>%
+  wide_to_long(sources.br) %>%
+  filter(sum > 0) ->
+  dbr
+
+plot.save2("Lancelet", dbr, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+dbr %>% plot_pseudo("Lancelet", bases_per_pseudo = 5e8)
