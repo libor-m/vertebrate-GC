@@ -94,7 +94,7 @@ plot_pseudo <- function (d,
            pseudo_pos=catpos %% bases_per_pseudo) %>%
     
     # add alternate coloring
-    left_join(sbs_pseudo %>% select(seq, alt=alternate)) %>%
+    left_join(sbs_pseudo %>% select(seq, alt=alternate), by="seq") %>%
     
     # plot it
     ggplot(aes(pseudo_pos, GC)) + 
