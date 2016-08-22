@@ -17,12 +17,12 @@ sources <- c(
 )
 
 dfile <- names(sources[3])
-d <- read.delim(paste0('profiles/', dfile), col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
+d <- read.delim(paste0('data/profiles/', dfile), col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
   mutate(sum = A + C + G + T, GC = (C + G) / sum)
 
 #### GC profile along chromosomes/scaffolds ####
 
-d %>% 
+d %>%
   group_by(seq) %>%
   summarise(count=n()) %>%
   arrange(desc(count)) %>%
@@ -31,19 +31,19 @@ d %>%
   top20seqs
 
 # profiles along top 20 longest scaffolds
-d %>% 
-  filter(seq  %in% top20seqs) %>% 
+d %>%
+  filter(seq  %in% top20seqs) %>%
   ggplot(aes(pos, GC)) +
   geom_line() +
   facet_wrap(~seq) +
   ylim(c(0.3, 0.7))
 
 # profiles, summarize in 100k windows
-d %>% 
-  filter(seq  %in% top20seqs) %>% 
+d %>%
+  filter(seq  %in% top20seqs) %>%
   group_by(seq, pos=round_any(pos, 100000, floor)) %>%
   summarise(A=sum(A), C=sum(C), G=sum(G), T=sum(T)) %>%
-  mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>% 
+  mutate(sum = A + C + G + T, GC = (C + G) / (sum+1)) %>%
   ggplot(aes(pos, GC)) +
   geom_line() +
   facet_wrap(~seq) +
@@ -56,13 +56,13 @@ d %>%
 source('chromoplot.R')
 
 load.plot.save <- function(fn, bases_per_pseudo=2.5e8) {
-  d <- read.delim(paste0('profiles/', fn), 
+  d <- read.delim(paste0('profiles/', fn),
                   col.names=c("seq", "pos", "A", "C", "G", "T")) %>%
     mutate(sum = A + C + G + T, GC = (C + G) / sum)
-  
+
   d %>% plot_pseudo(sources[fn], bases_per_pseudo)
-  
-  d %>% 
+
+  d %>%
     group_by(seq) %>%
     summarise(size=as.numeric(max(pos + bases_per_block))) %>%
     {(sum(.$size) %/% bases_per_pseudo) + 1} ->
@@ -71,7 +71,7 @@ load.plot.save <- function(fn, bases_per_pseudo=2.5e8) {
   # when there is too few panels, do not make them too high
   # do not go over A4 height on the other side
   h <- min(280, npanels * 40 + 50)
-  
+
   ggsave(paste0('results/mondsee/pseudo-', sources[fn], '.pdf'), width=190, height=h, units = "mm")
 }
 
@@ -96,15 +96,15 @@ ggsave('results/mondsee/block-scaling-test.pdf', width=280, height=190, units="m
 
 #### GC summary for more species ####
 
-d %>% 
-  ggplot(aes(GC)) + 
+d %>%
+  ggplot(aes(GC)) +
   geom_histogram()
 
-# read profile data, 
+# read profile data,
 # add a filename to each row
 # calculate stats
 read.name <- function(fn) {
-  read.delim(paste0("profiles/", fn), 
+  read.delim(paste0("profiles/", fn),
              col.names=c("seq", "pos", "A", "C", "G", "T"),
              colClasses=c("seq"="factor")) %>%
     mutate(sum = A + C + G + T, GC = (C + G) / sum, source=fn)
@@ -122,7 +122,7 @@ sources <- c(
   "Human-100k.tsv"="Human"
 )
 
-# load all tables, each of them has the source in 
+# load all tables, each of them has the source in
 # source column
 tabs <- lapply(names(sources), read.name)
 da <- bind_rows(tabs)
@@ -131,9 +131,9 @@ da <- bind_rows(tabs)
 
 da %>%
   mutate(source=factor(source, levels=names(sources), labels=sources)) %>%
-  ggplot(aes(GC)) + 
+  ggplot(aes(GC)) +
   geom_density(colour=NA, fill="#444444") +
-  facet_wrap(~source) + 
+  facet_wrap(~source) +
   xlim(c(0.3, 0.6)) +
   xlab("GC fraction") +
   ylab("block density") +

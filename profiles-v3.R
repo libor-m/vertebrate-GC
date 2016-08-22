@@ -1,7 +1,7 @@
 setwd('c:/work/gar/')
 
 read.name <- function(fn, datadir) {
-  read.delim(paste0(datadir, "/", fn), 
+  read.delim(paste0(datadir, "/", fn),
              col.names=c("seq", "pos", "A", "C", "G", "T"),
              colClasses=c("seq"="factor")) %>%
     mutate(sum = A + C + G + T, GC = (C + G) / sum, source=fn)
@@ -23,14 +23,14 @@ sources <- c(
   "Homo_sapiens.GRCh38.dna_sm.toplevel.fa.tsv" = "Human"
 )
 
-tabs <- lapply(names(sources), read.name, "profiles-v3")
+tabs <- lapply(names(sources), read.name, "data/profiles-v3")
 da <- bind_rows(tabs)
 
 da %>%
   mutate(source=factor(source, levels=names(sources), labels=sources)) %>%
-  ggplot(aes(GC)) + 
+  ggplot(aes(GC)) +
   geom_density(colour=NA, fill="#444444") +
-  facet_wrap(~source, ncol=3) + 
+  facet_wrap(~source, ncol=3) +
   xlim(c(0.3, 0.6)) +
   xlab("GC fraction") +
   ylab("block density") +
