@@ -25,7 +25,7 @@ def main():
     regions = pybedtools.BedTool(sys.argv[2])
     
     for idx, r in enumerate(regions):
-        seq = genome.fetch(r.chrom, r.start, r.end)
+        seq = genome.fetch(str(r.chrom), r.start, r.end)
         # seq = genome.fetch_sequence(r.chrom, r.start, r.end)
         
         if len(seq) == 0:
