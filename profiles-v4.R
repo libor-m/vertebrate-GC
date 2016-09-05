@@ -36,7 +36,6 @@ sources <- c(
   "Homo_sapiens.GRCh38.dna_sm.toplevel.fa.tsv" = "Human"
 )
 
-
 # load "data all"
 lapply(names(sources), read.name, "data/profiles-v4") %>%
   bind_rows ->
@@ -271,15 +270,42 @@ plot.save2("Zebrafish", dm, prefix="results/profiles-publication/profile-", min_
 plot.save2("Tetraodon", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
 
 # Lancelet profile for Figuire S5(?)
-sources.br <- c(
-  "Branchiostoma_floridae_v2.0.assembly.fasta.tsv"="Lancelet"
+sources.tmp <- c(
+    "Branchiostoma_floridae_v2.0.assembly.fasta.tsv"="Lancelet"
 )
 
-# load lancelet v4 profile
-read.name(names(sources.br)[1], "profiles-v4") %>%
-  wide_to_long(sources.br) %>%
-  filter(sum > 0) ->
-  dbr
+# load single v4 profile
+read.name(names(sources.tmp)[1], "profiles-v4") %>%
+    wide_to_long(sources.tmp) %>%
+    filter(sum > 0) ->
+    dtmp
 
-plot.save2("Lancelet", dbr, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
 dbr %>% plot_pseudo("Lancelet", bases_per_pseudo = 5e8)
+
+# another ad hoc profiles
+sources.tmp <- c(
+    "Gallus_gallus.Galgal4.dna_sm.toplevel.fa.bgz.tsv" = "Chicken",
+    "Branchiostoma.belcheri_v18h27.r3_ref_genome.softmasked.fa.bgz.tsv" = "Chinese lancelet",
+    "Branchiostoma_floridae_v2.0.assembly.fasta.tsv" = "Lancelet",
+    "Homo_sapiens.GRCh38.dna_sm.toplevel.fa.tsv" = "Human",
+    "Mus_musculus.GRCm38.dna_sm.primary_assembly.fa.gz.tsv" = "Mouse"
+)
+
+# load "data all"
+lapply(names(sources.tmp), read.name, "data/profiles-v4") %>%
+    bind_rows ->
+    da
+
+da %>% wide_to_long(sources.tmp) -> dm
+
+lapply(names(sources.tmp), read.name, "data/profiles-v4") %>%
+    bind_rows %>%
+    wide_to_long(sources.tmp) -> 
+    dm
+
+plot.save2("Chicken", dm, prefix="results/profiles-publication/profile-", min_scaffold=3e6)
+plot.save2("Human", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+plot.save2("Mouse", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+plot.save2("Lancelet", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+plot.save2("Chinese lancelet", dm, prefix="results/profiles-publication/profile-", min_scaffold=1e6)
+
