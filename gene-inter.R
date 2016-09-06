@@ -29,7 +29,8 @@ long2wide <- function(d)
 densplot <- function(d)
     d %>%
       ggplot(aes(gc_total/total, fill=compartment)) +
-      geom_density(alpha=0.6, colour=NA)
+      geom_density(alpha=0.6, colour=NA) +
+      xlim(0, 0.8)
 
 load_plot_save <- function(path) {
     load_data(path) %>%
